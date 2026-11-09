@@ -290,3 +290,144 @@ select:focus {
 .clear-button:hover {
   background: #f3f4f6;
 }
+
+/* Complementos para a aba de etiquetas internas */
+.label-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 5px;
+  margin-bottom: 24px;
+  background: #eef2f7;
+  border-radius: 14px;
+}
+.label-tab {
+  border: 0;
+  padding: 12px 6px;
+  border-radius: 10px;
+  color: #475569;
+  background: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+.label-tab.active {
+  color: #1d4ed8;
+  background: white;
+  box-shadow: 0 2px 8px rgba(15,23,42,.1);
+}
+.internal-panel { min-width: 0; }
+.internal-info {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  color: #475569;
+  background: #f8fafc;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.internal-label-preview {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  margin: 0 auto;
+  padding: 15px 11px 10px;
+  border: 2px solid #111827;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  background: white;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.internal-product {
+  font-size: 20px;
+  line-height: 1.15;
+  font-weight: 800;
+  text-transform: uppercase;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+.internal-quantity-title {
+  border-top: 1px solid #111827;
+  padding-top: 7px;
+  width: 100%;
+  font-size: 14px;
+}
+.internal-quantity {
+  font-size: 24px;
+  font-weight: 800;
+}
+.internal-date, .internal-responsible { align-self: flex-start; text-align: left; }
+.internal-responsible { white-space: nowrap; font-size: 11px; }
+.internal-company {
+  margin-top: auto;
+  padding-top: 7px;
+  border-top: 1px solid #111827;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  font-size: 10px;
+  line-height: 1.2;
+}
+@media (max-width: 480px) {
+  .label-tab { font-size: 13px; }
+}
+
+/* Etiquetas internas reutilizáveis */
+.internal-save-controls { margin-top: 16px; }
+.save-internal-button {
+  width: 100%; padding: 14px 16px; border: 1px solid #2563eb;
+  border-radius: 14px; background: #eff6ff; color: #1d4ed8;
+  font-weight: 800; cursor: pointer;
+}
+.save-internal-button:hover { background: #dbeafe; }
+.internal-save-message { margin: 10px 0 0; color: #1d4ed8; font-size: 13px; line-height: 1.45; }
+.saved-internal-section {
+  margin-top: 20px; padding: 14px; background: #f8fafc;
+  border: 1px solid #dbe3ec; border-radius: 16px;
+}
+.saved-internal-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.saved-internal-heading h2 { margin: 0; font-size: 17px; }
+.saved-internal-heading span { background: #dbeafe; color: #1d4ed8; border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 800; }
+.saved-internal-empty, .saved-internal-note { color: #64748b; font-size: 12px; line-height: 1.5; }
+.saved-internal-empty { margin: 12px 0 0; }
+.saved-internal-note { margin: 12px 0 0; }
+.saved-internal-list { display: grid; gap: 10px; margin-top: 12px; }
+.saved-internal-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; }
+.saved-internal-details { min-width: 0; display: grid; gap: 3px; overflow-wrap: anywhere; }
+.saved-internal-details strong { font-size: 14px; }
+.saved-internal-details span { font-size: 13px; color: #475569; }
+.saved-internal-actions { flex-shrink: 0; display: flex; gap: 6px; }
+.saved-internal-actions button { padding: 9px 11px; background: #2563eb; color: white; border: 0; border-radius: 9px; cursor: pointer; font-weight: 700; font-size: 12px; }
+.saved-internal-actions button.saved-internal-delete { background: white; color: #b91c1c; border: 1px solid #fecaca; }
+@media (max-width: 380px) {
+  .saved-internal-item { flex-direction: column; align-items: stretch; }
+  .saved-internal-actions button { flex: 1; }
+}
+
+/* Complemento para Etiquetas salvas recolhíveis e busca.
+   Adicionar após os estilos existentes do App.css. */
+.saved-internal-section { padding: 0; overflow: hidden; }
+.saved-internal-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 15px 16px; border: 0;
+  background: #f8fafc; color: #0f172a; cursor: pointer;
+  font-weight: 800; font-size: 15px; text-align: left;
+}
+.saved-internal-toggle:hover { background: #eff6ff; }
+.saved-internal-toggle:focus-visible { outline: 3px solid #93c5fd; outline-offset: -3px; }
+.saved-internal-count { display: inline-block; margin-left: 6px; background: #dbeafe; color: #1d4ed8; border-radius: 20px; padding: 3px 9px; font-size: 12px; }
+.saved-internal-content { padding: 0 14px 14px; border-top: 1px solid #e2e8f0; }
+.saved-internal-search-label { display: flex; flex-direction: column; gap: 7px; padding-top: 14px; font-weight: 700; font-size: 13px; }
+.saved-internal-search-label input { width: 100%; min-width: 0; }
+@media (max-width: 480px) {
+  .saved-internal-item { flex-wrap: wrap; }
+  .saved-internal-actions { flex-wrap: wrap; }
+}
