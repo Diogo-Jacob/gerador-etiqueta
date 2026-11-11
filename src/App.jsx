@@ -53,6 +53,7 @@ function App() {
   const inputRef = useRef(null);
   const [paginaAtual, setPaginaAtual] = useState("transporte");
   const [interno, setInterno] = useState({ produto: "", quantidade: "" });
+  const [formatoInterno, setFormatoInterno] = useState("100x150");
   const [etiquetasSalvas, setEtiquetasSalvas] = useState(carregarEtiquetasInternas);
   const [avisoInterno, setAvisoInterno] = useState("");
   const [salvasAbertas, setSalvasAbertas] = useState(false);
@@ -75,6 +76,7 @@ function App() {
     volumes: "",
     tipoImpressao: "a4",
     etiquetasPorFolha: "8",
+    formatoZebra: "100x150",
   });
 
   function abrirSeletorArquivo() {
@@ -468,6 +470,7 @@ function App() {
       volumes: "",
       tipoImpressao: "a4",
       etiquetasPorFolha: "8",
+      formatoZebra: "100x150",
     });
 
     if (inputRef.current) {
@@ -493,135 +496,178 @@ function App() {
     return doc.splitTextToSize(texto, larguraMaxima);
   }
 
-  // PDF pronto para a Zebra ZD220: uma página de 100 x 150 mm por volume.
-  function criarPDFZebra(destinatario, nf, totalVolumes) {
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: [100, 150],
-    });
+  // Evita que textos longos ultrapassem a área segura de impressão.
+  function escreverCentralizado(doc, texto, centroX, y, larguraMaxima, fonteInicial, fonteMinima = 8) {
+    doc.setFont("helvetica", "bold");
+    let fonte = fonteInicial;
+    doc.setFontSize(fonte);
+    while (doc.getTextWidth(texto) > larguraMaxima && fonte > fonteMinima) {
+      fonte -= 0.5;
+      doc.setFontSize(fonte);
+    }
+    doc.text(texto, centroX, y, { align: "center" });
+  }
+
+  // PDF térmico: uma página por volume. Sem moldura externa, que poderia ser cortada
+  // caso a impressora tenha um pequeno deslocamento de posicionamento.
+  function criarPDFZebra(destinatario, nf, totalVolumes, formato = "100x150") {
+    const compacto = formato === "100x50";
+    const largura = 100;
+    const altura = compacto ? 50 : 150;
+    const doc = new jsPDF({ orientation: compacto ? "landscape" : "portrait", unit: "mm", format: [largura, altura] });
+    const centro = largura / 2;
 
     for (let i = 1; i <= totalVolumes; i++) {
-      if (i > 1) doc.addPage([100, 150], "portrait");
-
-      doc.setDrawColor(0);
-      doc.setLineWidth(0.45);
-      doc.rect(4, 4, 92, 142);
+      if (i > 1) doc.addPage([largura, altura], compacto ? "landscape" : "portrait");
       doc.setFont("helvetica", "bold");
 
-      // Reduz a fonte quando o nome é longo para mantê-lo dentro da etiqueta.
-      let tamanhoNome = 18;
-      let linhasNome = [];
-      do {
-        doc.setFontSize(tamanhoNome);
-        linhasNome = doc.splitTextToSize(destinatario.toUpperCase(), 82);
-        if (linhasNome.length <= 3) break;
-        tamanhoNome -= 1;
-      } while (tamanhoNome > 9);
-
-      const alturaLinhaNome = tamanhoNome * 0.45;
-      const inicioNome = 30 - ((linhasNome.length - 1) * alturaLinhaNome) / 2;
-      doc.text(linhasNome.slice(0, 4), 50, inicioNome, {
-        align: "center",
-        lineHeightFactor: 1.05,
-      });
-
-      doc.setLineWidth(0.3);
-      doc.line(10, 55, 90, 55);
-
-      let tamanhoNF = 25;
-      const textoNF = `NF/${formatarNF(nf)}`;
-      doc.setFontSize(tamanhoNF);
-      while (doc.getTextWidth(textoNF) > 82 && tamanhoNF > 12) {
-        tamanhoNF -= 1;
-        doc.setFontSize(tamanhoNF);
+      if (compacto) {
+        // Margem lateral de 6 mm e vertical de pelo menos 5 mm.
+        let fonteNome = 13;
+        let linhasNome = [];
+        do {
+          doc.setFontSize(fonteNome);
+          linhasNome = doc.splitTextToSize(destinatario.toUpperCase(), 88);
+          if (linhasNome.length <= 2) break;
+          fonteNome -= 0.5;
+        } while (fonteNome > 8);
+        if (linhasNome.length > 2) {
+          alert("O destinatário é muito longo para a etiqueta 100x50. Abrevie o nome ou use 100x150.");
+          return null;
+        }
+        const yNome = linhasNome.length === 1 ? 12 : 9.5;
+        doc.text(linhasNome, centro, yNome, { align: "center", lineHeightFactor: 1.05 });
+        doc.setDrawColor(160);
+        doc.setLineWidth(0.18);
+        doc.line(7, 19, 93, 19);
+        escreverCentralizado(doc, `NF/${formatarNF(nf)}`, centro, 29, 86, 20, 12);
+        escreverCentralizado(doc, `VOLUME ${i}/${totalVolumes}`, centro, 42, 86, 20, 12);
+      } else {
+        // Modelo grande: toda a informação centralizada com 8 mm livres nas bordas.
+        let fonteNome = 18;
+        let linhasNome = [];
+        do {
+          doc.setFontSize(fonteNome);
+          linhasNome = doc.splitTextToSize(destinatario.toUpperCase(), 84);
+          if (linhasNome.length <= 3) break;
+          fonteNome -= 0.5;
+        } while (fonteNome > 9);
+        if (linhasNome.length > 3) {
+          alert("O nome do destinatário é muito longo. Abrevie antes de gerar a etiqueta.");
+          return null;
+        }
+        const yNome = 30 - ((linhasNome.length - 1) * fonteNome * 0.35) / 2;
+        doc.text(linhasNome, centro, yNome, { align: "center", lineHeightFactor: 1.05 });
+        doc.setDrawColor(160);
+        doc.setLineWidth(0.2);
+        doc.line(9, 55, 91, 55);
+        escreverCentralizado(doc, `NF/${formatarNF(nf)}`, centro, 76, 84, 26, 12);
+        doc.line(9, 88, 91, 88);
+        escreverCentralizado(doc, "VOLUME", centro, 108, 84, 20, 12);
+        escreverCentralizado(doc, `${i}/${totalVolumes}`, centro, 131, 84, 39, 14);
       }
-      doc.text(textoNF, 50, 76, { align: "center" });
-      doc.line(10, 88, 90, 88);
-
-      doc.setFontSize(19);
-      doc.text("VOLUME", 50, 108, { align: "center" });
-
-      let tamanhoVolume = 40;
-      const textoVolume = `${i}/${totalVolumes}`;
-      doc.setFontSize(tamanhoVolume);
-      while (doc.getTextWidth(textoVolume) > 82 && tamanhoVolume > 14) {
-        tamanhoVolume -= 1;
-        doc.setFontSize(tamanhoVolume);
-      }
-      doc.text(textoVolume, 50, 130, { align: "center" });
     }
-
     return doc;
   }
 
-  // Etiqueta interna horizontal no mesmo papel térmico de 100 x 150 mm.
-  // O PDF é 150 x 100 mm, para lembrar o modelo horizontal da foto.
+  // Etiqueta de produção: formatos 150x100 (rolo 100x150 girado)
+  // e 100x50, ambos sem moldura externa para evitar cortes nas bordas.
   function criarPDFInterno(baixar = true) {
     const produto = interno.produto.trim();
     const quantidade = interno.quantidade.trim();
-    if (!produto || !/^\d+$/.test(quantidade) || Number(quantidade) < 1) {
+    if (!produto || !/^\d+$/.test(quantidade) || Number(quantidade) < 1 || !Number.isSafeInteger(Number(quantidade))) {
       alert("Informe o nome do produto e uma quantidade válida de peças.");
       return;
     }
 
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: [100, 150] });
-    const centro = 75;
-    const larguraUtil = 136;
-    doc.setDrawColor(0);
-    doc.setLineWidth(0.45);
-    doc.rect(4, 4, 142, 92);
+    const compacto = formatoInterno === "100x50";
+    const doc = new jsPDF({
+      orientation: "landscape", unit: "mm",
+      format: compacto ? [100, 50] : [150, 100],
+    });
+    const centro = compacto ? 50 : 75;
+    const larguraUtil = compacto ? 88 : 136;
+    const qtdTexto = `${Number(quantidade).toLocaleString("pt-BR")} peças`;
 
     doc.setFont("helvetica", "bold");
-    let fonteProduto = 21;
+    let fonteProduto = compacto ? 12 : 21;
     let linhasProduto = [];
     do {
       doc.setFontSize(fonteProduto);
       linhasProduto = doc.splitTextToSize(produto.toUpperCase(), larguraUtil);
       if (linhasProduto.length <= 2) break;
-      fonteProduto -= 1;
-    } while (fonteProduto > 11);
+      fonteProduto -= 0.5;
+    } while (fonteProduto > (compacto ? 8 : 11));
     if (linhasProduto.length > 2) {
-      alert("O nome do produto é muito longo para a etiqueta. Resuma o nome.");
+      alert("O nome do produto é muito longo para esse formato. Abrevie ou escolha 100x150.");
       return;
     }
-    const alturaLinha = fonteProduto * 0.4;
-    const yProduto = 17 - (linhasProduto.length - 1) * alturaLinha / 2;
-    doc.text(linhasProduto, centro, yProduto, { align: "center", lineHeightFactor: 1.1 });
-    doc.setLineWidth(0.25);
-    doc.line(8, 30, 142, 30);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(13);
-    doc.text("Quantidade:", 10, 44);
-    doc.setFont("helvetica", "bold");
-    let fonteQuantidade = 23;
-    const qtdTexto = `${Number(quantidade).toLocaleString("pt-BR")} peças`;
-    doc.setFontSize(fonteQuantidade);
-    while (doc.getTextWidth(qtdTexto) > 94 && fonteQuantidade > 12) {
-      fonteQuantidade -= 1;
+    if (compacto) {
+      // Tudo dentro da zona segura: 5 mm nas laterais, pelo menos 4 mm em cima/baixo.
+      doc.text(linhasProduto, centro, linhasProduto.length === 1 ? 10.5 : 8.5,
+        { align: "center", lineHeightFactor: 1.05 });
+      doc.setDrawColor(160);
+      doc.setLineWidth(0.17);
+      doc.line(6, 17, 94, 17);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text("Qtd:", 6, 26);
+      escreverCentralizado(doc, qtdTexto, 62, 26.5, 61, 17, 10);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.text("Responsável: ______________", 6, 33);
+      doc.text(`Data: ${dataHoje()}`, 94, 33, { align: "right" });
+      doc.line(6, 35, 94, 35);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.3);
+      doc.text(EMPRESA.nome, centro, 39, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.7);
+      doc.text(EMPRESA.telefones, centro, 42.5, { align: "center" });
+      doc.setFontSize(6.9);
+      doc.text(EMPRESA.email, centro, 46, { align: "center" });
+    } else {
+      const alturaLinha = fonteProduto * 0.4;
+      const yProduto = 17 - (linhasProduto.length - 1) * alturaLinha / 2;
+      doc.text(linhasProduto, centro, yProduto, { align: "center", lineHeightFactor: 1.1 });
+      doc.setDrawColor(160);
+      doc.setLineWidth(0.2);
+      doc.line(8, 30, 142, 30);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(13);
+      doc.text("Quantidade:", 10, 44);
+      doc.setFont("helvetica", "bold");
+      let fonteQuantidade = 23;
       doc.setFontSize(fonteQuantidade);
+      while (doc.getTextWidth(qtdTexto) > 94 && fonteQuantidade > 12) {
+        fonteQuantidade -= 1;
+        doc.setFontSize(fonteQuantidade);
+      }
+      doc.text(qtdTexto, 140, 44, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11.5);
+      doc.text("Responsável: __________________", 10, 60);
+      doc.text(`Data: ${dataHoje()}`, 140, 60, { align: "right" });
+      doc.line(8, 67, 142, 67);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(EMPRESA.nome, centro, 76, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.8);
+      doc.text(EMPRESA.telefones, centro, 84, { align: "center" });
+      doc.text(EMPRESA.email, centro, 91, { align: "center" });
     }
-    doc.text(qtdTexto, 140, 44, { align: "right" });
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11.5);
-    doc.text("Responsável: __________________", 10, 60);
-    doc.text(`Data: ${dataHoje()}`, 140, 60, { align: "right" });
-    doc.line(8, 67, 142, 67);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(EMPRESA.nome, centro, 76, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.8);
-    doc.text(EMPRESA.telefones, centro, 84, { align: "center" });
-    doc.text(EMPRESA.email, centro, 91, { align: "center" });
 
     const nomeSeguro = produto.toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 45);
-    abrirOuBaixarPDF(doc, `etiqueta-interna-${nomeSeguro || "produto"}.pdf`, baixar);
+    abrirOuBaixarPDF(doc, `etiqueta-interna-${formatoInterno}-${nomeSeguro || "produto"}.pdf`, baixar);
   }
 
   function limparInterno() {
@@ -685,9 +731,10 @@ function App() {
     }
 
     if (dados.tipoImpressao === "zebra") {
-      const docZebra = criarPDFZebra(destinatario, nf, totalVolumes);
+      const docZebra = criarPDFZebra(destinatario, nf, totalVolumes, dados.formatoZebra);
+      if (!docZebra) return;
       if (baixar) {
-        docZebra.save(`etiquetas-zebra-nf-${formatarNF(nf)}.pdf`);
+        docZebra.save(`etiquetas-zebra-${dados.formatoZebra}-nf-${formatarNF(nf)}.pdf`);
       } else {
         const url = URL.createObjectURL(docZebra.output("blob"));
         const aba = window.open(url, "_blank");
@@ -811,7 +858,7 @@ function App() {
             <h1>Gerador de Etiquetas</h1>
             <p className="subtitle">
               Anexe uma nota fiscal, confira os dados e gere etiquetas em A4
-              ou no formato térmico 100x150 mm.
+              ou nos formatos térmicos 100x150 e 100x50 mm.
             </p>
           </div>
         </div>
@@ -886,6 +933,17 @@ function App() {
             </select>
           </label>
 
+          {dados.tipoImpressao === "zebra" && (
+            <label>
+              Tamanho da etiqueta Zebra
+              <select value={dados.formatoZebra}
+                onChange={(e) => atualizarCampo("formatoZebra", e.target.value)}>
+                <option value="100x150">100 × 150 mm - maior</option>
+                <option value="100x50">100 × 50 mm - compacta</option>
+              </select>
+            </label>
+          )}
+
           {dados.tipoImpressao === "a4" && (
             <label>
               Etiquetas por folha A4
@@ -956,6 +1014,16 @@ function App() {
                 <input type="number" min="1" step="1" inputMode="numeric" value={interno.quantidade}
                   onChange={(e) => setInterno((atual) => ({ ...atual, quantidade: e.target.value }))}
                   placeholder="Ex: 500" />
+              </label>
+            </div>
+
+            <div className="form">
+              <label>
+                Tamanho da etiqueta Zebra
+                <select value={formatoInterno} onChange={(e) => setFormatoInterno(e.target.value)}>
+                  <option value="100x150">100 × 150 mm - maior (horizontal)</option>
+                  <option value="100x50">100 × 50 mm - compacta (horizontal)</option>
+                </select>
               </label>
             </div>
 
@@ -1034,7 +1102,7 @@ function App() {
 
             <div className="internal-info">
               <span><strong>Data automática:</strong> {dataHoje()}</span>
-              <span><strong>Formato:</strong> Zebra ZD220 · papel 100 × 150 mm (layout horizontal)</span>
+              <span><strong>Formato:</strong> Zebra ZD220 · papel {formatoInterno.replace("x", " × ")} mm (layout horizontal)</span>
               <span><strong>Responsável:</strong> espaço em branco para preencher à caneta</span>
             </div>
 
