@@ -54,6 +54,7 @@ function App() {
   const [paginaAtual, setPaginaAtual] = useState("transporte");
   const [interno, setInterno] = useState({ produto: "", quantidade: "" });
   const [formatoInterno, setFormatoInterno] = useState("100x150");
+  const [modeloInterno, setModeloInterno] = useState("empresa"); // "empresa" ou "mercado-livre"
   const [etiquetasSalvas, setEtiquetasSalvas] = useState(carregarEtiquetasInternas);
   const [avisoInterno, setAvisoInterno] = useState("");
   const [salvasAbertas, setSalvasAbertas] = useState(false);
@@ -604,7 +605,7 @@ function App() {
     }
 
     if (compacto) {
-      // Tudo dentro da zona segura: 5 mm nas laterais, pelo menos 4 mm em cima/baixo.
+      // Modelo compacto: os dois tipos usam a mesma dimensão 100 × 50 mm.
       doc.text(linhasProduto, centro, linhasProduto.length === 1 ? 10.5 : 8.5,
         { align: "center", lineHeightFactor: 1.05 });
       doc.setDrawColor(160);
@@ -616,20 +617,31 @@ function App() {
       doc.text("Qtd:", 6, 26);
       escreverCentralizado(doc, qtdTexto, 62, 26.5, 61, 17, 10);
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
-      doc.text("Responsável: ______________", 6, 33);
-      doc.text(`Data: ${dataHoje()}`, 94, 33, { align: "right" });
-      doc.line(6, 35, 94, 35);
+      if (modeloInterno === "mercado-livre") {
+        // Mercado Livre: sem nome, telefone ou e-mail da empresa.
+        // O espaço livre aumenta a legibilidade de data e responsável.
+        doc.setDrawColor(190);
+        doc.line(6, 32, 94, 32);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.text(`Data: ${dataHoje()}`, 6, 40);
+        doc.text("Responsável: __________________", 6, 46);
+      } else {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.text("Responsável: ______________", 6, 33);
+        doc.text(`Data: ${dataHoje()}`, 94, 33, { align: "right" });
+        doc.line(6, 35, 94, 35);
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.3);
-      doc.text(EMPRESA.nome, centro, 39, { align: "center" });
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(6.7);
-      doc.text(EMPRESA.telefones, centro, 42.5, { align: "center" });
-      doc.setFontSize(6.9);
-      doc.text(EMPRESA.email, centro, 46, { align: "center" });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.3);
+        doc.text(EMPRESA.nome, centro, 39, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.7);
+        doc.text(EMPRESA.telefones, centro, 42.5, { align: "center" });
+        doc.setFontSize(6.9);
+        doc.text(EMPRESA.email, centro, 46, { align: "center" });
+      }
     } else {
       const alturaLinha = fonteProduto * 0.4;
       const yProduto = 17 - (linhasProduto.length - 1) * alturaLinha / 2;
@@ -650,24 +662,32 @@ function App() {
       }
       doc.text(qtdTexto, 140, 44, { align: "right" });
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11.5);
-      doc.text("Responsável: __________________", 10, 60);
-      doc.text(`Data: ${dataHoje()}`, 140, 60, { align: "right" });
-      doc.line(8, 67, 142, 67);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.text(EMPRESA.nome, centro, 76, { align: "center" });
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9.8);
-      doc.text(EMPRESA.telefones, centro, 84, { align: "center" });
-      doc.text(EMPRESA.email, centro, 91, { align: "center" });
+      if (modeloInterno === "mercado-livre") {
+        doc.line(8, 55, 142, 55);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(14);
+        doc.text(`Data: ${dataHoje()}`, 10, 70);
+        doc.text("Responsável: __________________", 10, 87);
+      } else {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11.5);
+        doc.text("Responsável: __________________", 10, 60);
+        doc.text(`Data: ${dataHoje()}`, 140, 60, { align: "right" });
+        doc.line(8, 67, 142, 67);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text(EMPRESA.nome, centro, 76, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9.8);
+        doc.text(EMPRESA.telefones, centro, 84, { align: "center" });
+        doc.text(EMPRESA.email, centro, 91, { align: "center" });
+      }
     }
 
     const nomeSeguro = produto.toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 45);
-    abrirOuBaixarPDF(doc, `etiqueta-interna-${formatoInterno}-${nomeSeguro || "produto"}.pdf`, baixar);
+    abrirOuBaixarPDF(doc, `etiqueta-${modeloInterno === "mercado-livre" ? "mercado-livre" : "interna"}-${formatoInterno}-${nomeSeguro || "produto"}.pdf`, baixar);
   }
 
   function limparInterno() {
@@ -999,10 +1019,38 @@ function App() {
             <div className="header">
               <p className="tag">Identificação de produção</p>
               <h1>Etiquetas internas</h1>
-              <p className="subtitle">Preencha apenas produto e quantidade. A data e os contatos são automáticos.</p>
+              <p className="subtitle">Preencha produto e quantidade. A data é automática e o responsável fica em branco para preencher à caneta.</p>
             </div>
 
             <div className="form">
+              <div role="group" aria-label="Modelo da etiqueta interna">
+                <span style={{ display: "block", fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
+                  Modelo da etiqueta
+                </span>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+                  <button type="button" aria-pressed={modeloInterno === "empresa"}
+                    onClick={() => setModeloInterno("empresa")}
+                    style={{ padding: "12px 8px", borderRadius: 12, cursor: "pointer", fontWeight: 700,
+                      border: `2px solid ${modeloInterno === "empresa" ? "#2563eb" : "#cbd5e1"}`,
+                      background: modeloInterno === "empresa" ? "#eff6ff" : "#fff",
+                      color: modeloInterno === "empresa" ? "#1d4ed8" : "#111827" }}>
+                    🏭 Empresa
+                  </button>
+                  <button type="button" aria-pressed={modeloInterno === "mercado-livre"}
+                    onClick={() => setModeloInterno("mercado-livre")}
+                    style={{ padding: "12px 8px", borderRadius: 12, cursor: "pointer", fontWeight: 700,
+                      border: `2px solid ${modeloInterno === "mercado-livre" ? "#2563eb" : "#cbd5e1"}`,
+                      background: modeloInterno === "mercado-livre" ? "#eff6ff" : "#fff",
+                      color: modeloInterno === "mercado-livre" ? "#1d4ed8" : "#111827" }}>
+                    📦 Mercado Livre
+                  </button>
+                </div>
+                <small style={{ display: "block", marginTop: 8, color: "#64748b", lineHeight: 1.4 }}>
+                  {modeloInterno === "mercado-livre"
+                    ? "Sem identificação ou contatos da empresa; mantém produto, quantidade, data e responsável."
+                    : "Inclui nome e contatos da SD Plásticos."}
+                </small>
+              </div>
               <label>
                 Nome do produto
                 <input type="text" value={interno.produto}
@@ -1103,6 +1151,7 @@ function App() {
             <div className="internal-info">
               <span><strong>Data automática:</strong> {dataHoje()}</span>
               <span><strong>Formato:</strong> Zebra ZD220 · papel {formatoInterno.replace("x", " × ")} mm (layout horizontal)</span>
+              <span><strong>Modelo:</strong> {modeloInterno === "mercado-livre" ? "Mercado Livre (sem dados da empresa)" : "Empresa (com dados da SD)"}</span>
               <span><strong>Responsável:</strong> espaço em branco para preencher à caneta</span>
             </div>
 
@@ -1114,11 +1163,13 @@ function App() {
                 <div className="internal-quantity">{interno.quantidade ? `${Number(interno.quantidade).toLocaleString("pt-BR")} peças` : "— peças"}</div>
                 <div className="internal-date">Data: {dataHoje()}</div>
                 <div className="internal-responsible">Responsável: __________________</div>
-                <div className="internal-company">
-                  <strong>{EMPRESA.nome}</strong>
-                  <span>{EMPRESA.telefones}</span>
-                  <span>{EMPRESA.email}</span>
-                </div>
+                {modeloInterno === "empresa" && (
+                  <div className="internal-company">
+                    <strong>{EMPRESA.nome}</strong>
+                    <span>{EMPRESA.telefones}</span>
+                    <span>{EMPRESA.email}</span>
+                  </div>
+                )}
               </div>
             </div>
 
