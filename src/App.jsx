@@ -571,8 +571,8 @@ function App() {
     return doc;
   }
 
-  // Etiqueta de produção: formatos 150x100 (rolo 100x150 girado)
-  // e 100x50, ambos sem moldura externa para evitar cortes nas bordas.
+  // Etiqueta de produção: 150x100 (rolo 100x150 girado) ou 100x50.
+  // O layout prioriza letras grandes, sem borda externa, com área segura de 4 mm.
   function criarPDFInterno(baixar = true) {
     const produto = interno.produto.trim();
     const quantidade = interno.quantidade.trim();
@@ -583,84 +583,96 @@ function App() {
 
     const compacto = formatoInterno === "100x50";
     const doc = new jsPDF({
-      orientation: "landscape", unit: "mm",
+      orientation: "landscape",
+      unit: "mm",
       format: compacto ? [100, 50] : [150, 100],
     });
     const centro = compacto ? 50 : 75;
-    const larguraUtil = compacto ? 88 : 136;
     const qtdTexto = `${Number(quantidade).toLocaleString("pt-BR")} peças`;
 
-    doc.setFont("helvetica", "bold");
-    let fonteProduto = compacto ? 12 : 21;
+    // Escolhe a maior fonte que mantém o produto em até duas linhas.
+    // Verifica também se a largura de cada linha cabe dentro da etiqueta.
+    const larguraProduto = compacto ? 91 : 138;
+    const fonteMinima = compacto ? 11 : 14;
+    let fonteProduto = compacto ? 22 : 24;
     let linhasProduto = [];
-    do {
+    while (fonteProduto >= fonteMinima) {
+      doc.setFont("helvetica", "bold");
       doc.setFontSize(fonteProduto);
-      linhasProduto = doc.splitTextToSize(produto.toUpperCase(), larguraUtil);
-      if (linhasProduto.length <= 2) break;
+      linhasProduto = doc.splitTextToSize(produto.toUpperCase(), larguraProduto);
+      if (linhasProduto.length <= 2 && linhasProduto.every((linha) => doc.getTextWidth(linha) <= larguraProduto)) break;
       fonteProduto -= 0.5;
-    } while (fonteProduto > (compacto ? 8 : 11));
-    if (linhasProduto.length > 2) {
+    }
+    if (linhasProduto.length > 2 || linhasProduto.some((linha) => doc.getTextWidth(linha) > larguraProduto)) {
       alert("O nome do produto é muito longo para esse formato. Abrevie ou escolha 100x150.");
       return;
     }
 
-    if (compacto) {
-      // Modelo compacto: os dois tipos usam a mesma dimensão 100 × 50 mm.
-      doc.text(linhasProduto, centro, linhasProduto.length === 1 ? 10.5 : 8.5,
-        { align: "center", lineHeightFactor: 1.05 });
-      doc.setDrawColor(160);
-      doc.setLineWidth(0.17);
-      doc.line(6, 17, 94, 17);
+    // Escreve uma linha sem ultrapassar a largura máxima disponível.
+    function textoAjustado(texto, x, y, larguraMax, fonte, minimo, opcoes = {}) {
+      doc.setFontSize(fonte);
+      while (doc.getTextWidth(texto) > larguraMax && fonte > minimo) {
+        fonte -= 0.5;
+        doc.setFontSize(fonte);
+      }
+      doc.text(texto, x, y, opcoes);
+    }
 
+    doc.setTextColor(0);
+    doc.setDrawColor(135);
+    doc.setLineWidth(0.18);
+    doc.setFont("helvetica", "bold");
+
+    if (compacto) {
+      // 100x50: praticamente toda a altura é utilizada; 4 mm de margem lateral.
+      // O título fica perto da borda superior e maior do que no layout anterior.
+      doc.setFontSize(fonteProduto);
+      const yProduto = linhasProduto.length === 1 ? 13.1 : 7.5;
+      doc.text(linhasProduto, centro, yProduto, {
+        align: "center",
+        lineHeightFactor: 1.02,
+      });
+      doc.line(4.5, 19.2, 95.5, 19.2);
+
+      // Destaque da quantidade: texto maior e alinhado à direita.
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.text("Qtd:", 6, 26);
-      escreverCentralizado(doc, qtdTexto, 62, 26.5, 61, 17, 10);
+      textoAjustado("Qtd:", 4.5, 29.3, 25, 11.5, 9.5);
+      doc.setFont("helvetica", "bold");
+      textoAjustado(qtdTexto, 95.5, 29.8, 65, 25, 12, { align: "right" });
 
       if (modeloInterno === "mercado-livre") {
-        // Mercado Livre: sem nome, telefone ou e-mail da empresa.
-        // O espaço livre aumenta a legibilidade de data e responsável.
-        doc.setDrawColor(190);
-        doc.line(6, 32, 94, 32);
+        // Mercado Livre: somente produto, quantidade, data e responsável.
+        doc.line(4.5, 34, 95.5, 34);
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.text(`Data: ${dataHoje()}`, 6, 40);
-        doc.text("Responsável: __________________", 6, 46);
+        textoAjustado("Responsável: __________________", 4.5, 41, 90, 11, 9);
+        textoAjustado(`Data: ${dataHoje()}`, 4.5, 47.1, 90, 11, 9);
       } else {
+        // Empresa: fontes ampliadas, sem moldura que poderia ser cortada.
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(7.5);
-        doc.text("Responsável: ______________", 6, 33);
-        doc.text(`Data: ${dataHoje()}`, 94, 33, { align: "right" });
-        doc.line(6, 35, 94, 35);
+        textoAjustado("Responsável: ______________", 4.5, 35.1, 56, 9.3, 8.5);
+        textoAjustado(`Data: ${dataHoje()}`, 95.5, 35.1, 38, 9.3, 8.5, { align: "right" });
+        doc.line(4.5, 37.2, 95.5, 37.2);
 
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(7.3);
-        doc.text(EMPRESA.nome, centro, 39, { align: "center" });
+        textoAjustado(EMPRESA.nome, centro, 41.4, 91, 10.5, 8, { align: "center" });
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.7);
-        doc.text(EMPRESA.telefones, centro, 42.5, { align: "center" });
-        doc.setFontSize(6.9);
-        doc.text(EMPRESA.email, centro, 46, { align: "center" });
+        textoAjustado(EMPRESA.telefones, centro, 45.2, 91, 9.2, 7.5, { align: "center" });
+        textoAjustado(EMPRESA.email, centro, 48.4, 91, 9.2, 7.5, { align: "center" });
       }
     } else {
+      // 100x150 (layout na horizontal): mantém o tamanho geral, aumenta
+      // apenas o bloco de identificação/contatos da empresa.
       const alturaLinha = fonteProduto * 0.4;
-      const yProduto = 17 - (linhasProduto.length - 1) * alturaLinha / 2;
+      const yProduto = 17 - ((linhasProduto.length - 1) * alturaLinha) / 2;
+      doc.setFontSize(fonteProduto);
       doc.text(linhasProduto, centro, yProduto, { align: "center", lineHeightFactor: 1.1 });
-      doc.setDrawColor(160);
-      doc.setLineWidth(0.2);
       doc.line(8, 30, 142, 30);
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(13);
       doc.text("Quantidade:", 10, 44);
       doc.setFont("helvetica", "bold");
-      let fonteQuantidade = 23;
-      doc.setFontSize(fonteQuantidade);
-      while (doc.getTextWidth(qtdTexto) > 94 && fonteQuantidade > 12) {
-        fonteQuantidade -= 1;
-        doc.setFontSize(fonteQuantidade);
-      }
-      doc.text(qtdTexto, 140, 44, { align: "right" });
+      textoAjustado(qtdTexto, 140, 44, 94, 23, 12, { align: "right" });
 
       if (modeloInterno === "mercado-livre") {
         doc.line(8, 55, 142, 55);
@@ -674,20 +686,19 @@ function App() {
         doc.text("Responsável: __________________", 10, 60);
         doc.text(`Data: ${dataHoje()}`, 140, 60, { align: "right" });
         doc.line(8, 67, 142, 67);
+
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
-        doc.text(EMPRESA.nome, centro, 76, { align: "center" });
+        textoAjustado(EMPRESA.nome, centro, 77, 136, 17, 11, { align: "center" });
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(9.8);
-        doc.text(EMPRESA.telefones, centro, 84, { align: "center" });
-        doc.text(EMPRESA.email, centro, 91, { align: "center" });
+        textoAjustado(EMPRESA.telefones, centro, 86, 136, 14.5, 10, { align: "center" });
+        textoAjustado(EMPRESA.email, centro, 95, 136, 14.5, 10, { align: "center" });
       }
     }
 
     const nomeSeguro = produto.toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 45);
-    abrirOuBaixarPDF(doc, `etiqueta-${modeloInterno === "mercado-livre" ? "mercado-livre" : "interna"}-${formatoInterno}-${nomeSeguro || "produto"}.pdf`, baixar);
+    abrirOuBaixarPDF(doc, `etiqueta-v2-${modeloInterno === "mercado-livre" ? "mercado-livre" : "interna"}-${formatoInterno}-${nomeSeguro || "produto"}.pdf`, baixar);
   }
 
   function limparInterno() {
@@ -863,6 +874,66 @@ function App() {
 
   return (
     <main className="page">
+      <style>{`
+        /* Prévia fiel à orientação horizontal dos PDFs internos. */
+        .internal-label-preview.internal-v2 {
+          width: 100%; max-width: 100%; box-sizing: border-box;
+          padding: 10px 12px 8px; border: 1px solid #1f2937;
+          display: flex; flex-direction: column; align-items: stretch;
+          gap: 0; min-height: 0; overflow: hidden;
+          background: #fff; text-align: center;
+        }
+        .internal-v2.size-150 { aspect-ratio: 3 / 2; }
+        .internal-v2.size-50 { aspect-ratio: 2 / 1; padding: 6px 8px 4px; }
+        .internal-v2 .internal-product {
+          display: block; min-height: 0; font-size: clamp(20px, 5.2vw, 31px);
+          font-weight: 900; line-height: 1.05; text-transform: uppercase;
+          margin: 0 0 7px; padding: 0;
+        }
+        .internal-v2 .internal-quantity-title {
+          width: 100%; border-top: 1px solid #64748b;
+          padding-top: 5px; font-size: clamp(13px, 2.4vw, 16px);
+          line-height: 1.1;
+        }
+        .internal-v2 .internal-quantity {
+          font-size: clamp(24px, 6vw, 38px); font-weight: 900;
+          line-height: 1.1; margin: 3px 0 7px;
+        }
+        .internal-v2 .internal-date,
+        .internal-v2 .internal-responsible {
+          align-self: flex-start; text-align: left;
+          font-size: clamp(12px, 2.2vw, 15px);
+          line-height: 1.3; white-space: normal; padding: 0; margin: 0 0 3px;
+        }
+        .internal-v2 .internal-company {
+          margin-top: auto; padding-top: 4px; border-top: 1px solid #64748b;
+          display: flex; flex-direction: column; gap: 2px; width: 100%;
+          font-size: clamp(12px, 2.35vw, 15px); line-height: 1.15;
+        }
+        .internal-v2 .internal-company strong { font-size: 1.08em; }
+        .internal-v2.size-50 .internal-product {
+          font-size: clamp(17px, 4.5vw, 27px); margin-bottom: 3px;
+        }
+        .internal-v2.size-50 .internal-quantity-title {
+          padding-top: 3px; font-size: clamp(11px, 2.2vw, 14px);
+        }
+        .internal-v2.size-50 .internal-quantity {
+          font-size: clamp(19px, 5.2vw, 32px); margin: 1px 0 2px;
+        }
+        .internal-v2.size-50 .internal-date,
+        .internal-v2.size-50 .internal-responsible {
+          font-size: clamp(10px, 2vw, 13px); margin-bottom: 1px;
+        }
+        .internal-v2.size-50 .internal-company {
+          font-size: clamp(8px, 1.8vw, 11px); gap: 0; padding-top: 2px;
+        }
+        .internal-v2.marketplace .internal-quantity { margin-bottom: auto; }
+        @media (max-width: 440px) {
+          .internal-v2.size-50 .internal-product { font-size: 16px; }
+          .internal-v2.size-50 .internal-quantity { font-size: 21px; }
+          .internal-v2.size-50 .internal-company { font-size: 8px; }
+        }
+      `}</style>
       <section className="card">
         <nav className="label-tabs" aria-label="Tipo de etiqueta">
           <button type="button" className={paginaAtual === "transporte" ? "label-tab active" : "label-tab"}
@@ -1157,7 +1228,7 @@ function App() {
 
             <div className="preview">
               <p>Prévia da etiqueta interna</p>
-              <div className="internal-label-preview">
+              <div className={`internal-label-preview internal-v2 ${formatoInterno === "100x50" ? "size-50" : "size-150"} ${modeloInterno === "mercado-livre" ? "marketplace" : ""}`}>
                 <div className="internal-product">{interno.produto.trim() || "NOME DO PRODUTO"}</div>
                 <div className="internal-quantity-title">Quantidade</div>
                 <div className="internal-quantity">{interno.quantidade ? `${Number(interno.quantidade).toLocaleString("pt-BR")} peças` : "— peças"}</div>
